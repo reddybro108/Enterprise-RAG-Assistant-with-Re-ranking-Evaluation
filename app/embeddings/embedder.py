@@ -1,16 +1,18 @@
 from sentence_transformers import SentenceTransformer
-import warnings
-warnings.filterwarnings("ignore")
+import numpy as np
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
 def embed_texts(texts):
     embeddings = model.encode(texts)
-    print("Embedding shape:", len(embeddings), len(embeddings[0]))
+
+    # Ensure numpy + float32
+    embeddings = np.array(embeddings).astype("float32")
+
+    # Ensure 2D shape
+    if len(embeddings.shape) == 1:
+        embeddings = embeddings.reshape(1, -1)
+
+    print("Embedding shape:", embeddings.shape)
+
     return embeddings
-
-
-# test run
-if __name__ == "__main__":
-    sample = ["This is a test sentence"]
-    embed_texts(sample)
