@@ -1,0 +1,16 @@
+# Virtual Environment
+eraenv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large models / binaries
+*.pt
+*.bin
+*.dll
+
+# OS
+.DS_Store

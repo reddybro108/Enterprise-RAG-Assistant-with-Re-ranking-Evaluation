@@ -1,0 +1,48 @@
+# --- Core API Layer ---
+
+fastapi==0.110.0
+uvicorn==0.29.0
+
+# --- LangChain Ecosystem ---
+
+langchain==0.2.1
+langchain-community==0.2.1
+langchain-core==0.2.1
+
+# --- Embeddings & LLM ---
+
+transformers==4.41.2
+sentence-transformers==2.7.0
+accelerate==0.30.1
+
+# --- Vector Store ---
+
+faiss-cpu==1.8.0
+
+# --- Reranking ---
+
+rank-bm25==0.2.2
+scikit-learn==1.5.0
+
+# --- Data Processing ---
+
+pandas==2.2.2
+numpy==1.26.4
+
+# --- File Handling ---
+
+pypdf==4.2.0
+
+# --- Environment Management ---
+
+python-dotenv==1.0.1
+
+# --- Evaluation ---
+
+datasets==2.19.1
+evaluate==0.4.2
+
+# --- Optional (Logging / Dev) ---
+
+tqdm==4.66.4
+loguru==0.7.2
