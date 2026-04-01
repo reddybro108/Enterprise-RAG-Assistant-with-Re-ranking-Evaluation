@@ -1,0 +1,48 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise-rag-api
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    environment:
+      DATASET_TYPE: pdf
+      RAG_WARMUP_ON_START: "true"
+      OLLAMA_URL: http://host.docker.internal:11434/api/generate
+      OLLAMA_MODEL: qwen2.5:7b
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data:/app/data
+      - ./datasets:/app/datasets
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: enterprise-rag-ui
+    command:
+      - python
+      - -m
+      - streamlit
+      - run
+      - ui.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+    environment:
+      RAG_API_URL: http://api:8001
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+

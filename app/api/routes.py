@@ -25,27 +25,24 @@ class QueryResponse(BaseModel):
 
 @lru_cache(maxsize=1)
 def get_pipeline() -> RAGPipeline:
-    pipeline = RAGPipeline()
-    pipeline.initialize()
+    return RAGPipeline()
+
+
+def ensure_pipeline_ready() -> RAGPipeline:
+    pipeline = get_pipeline()
+    if not pipeline.is_ready:
+        pipeline.initialize()
     return pipeline
 
 
 @router.get("/health")
 def api_health():
+    pipeline = get_pipeline()
     status: dict[str, Any] = {
         "status": "ok",
-        "pipeline_ready": False,
+        "pipeline_ready": pipeline.is_ready,
+        "pipeline": pipeline.get_status(),
     }
-
-    try:
-        pipeline = get_pipeline()
-        status["pipeline_ready"] = pipeline.is_ready
-        status["pipeline"] = pipeline.get_status()
-    except Exception as exc:
-        status["pipeline"] = {
-            "is_ready": False,
-            "error": str(exc),
-        }
 
     return status
 
@@ -53,7 +50,7 @@ def api_health():
 @router.post("/query", response_model=QueryResponse)
 def query_rag(request: QueryRequest):
     try:
-        pipeline = get_pipeline()
+        pipeline = ensure_pipeline_ready()
         result = pipeline.query(request.query, request.top_k, request.rerank_top_n)
         prompt = build_prompt(request.query, result["context"])
         answer = generate_response(prompt)

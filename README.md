@@ -90,8 +90,10 @@ The application follows a layered structure:
 - PyPDF
 - pypdfium2
 - RapidOCR
-- Ollama
+- Ollama with `qwen2.5:7b` as the default local model
 - Pytest
+- Docker and Docker Compose
+- GitHub Actions
 
 ## Prerequisites
 
@@ -122,19 +124,19 @@ pip install -r requirements.txt
 
 ### 3. Prepare Ollama
 
-Make sure Ollama is running and a model is available locally.
+Make sure Ollama is running and the default model is available locally.
 
 Example:
 
 ```powershell
-ollama pull mistral
+ollama pull qwen2.5:7b
 ollama serve
 ```
 
 By default, the app expects:
 
 - `OLLAMA_URL=http://localhost:11434/api/generate`
-- `OLLAMA_MODEL=mistral`
+- `OLLAMA_MODEL=qwen2.5:7b`
 
 ## Dataset Setup
 
@@ -173,7 +175,7 @@ The application is configured through environment variables.
 
 | Variable | Default | Description |
 |---|---|---|
-| `RAG_API_URL` | `http://127.0.0.1:8000` | Base URL used by Streamlit to call FastAPI |
+| `RAG_API_URL` | `http://127.0.0.1:8001` | Base URL used by Streamlit to call FastAPI |
 | `DATASET_TYPE` | `pdf` | Dataset mode: `pdf` or `fiqa` |
 | `ENABLE_PDF_OCR` | `true` | Enables OCR fallback for scanned PDF pages |
 | `PDF_OCR_RENDER_SCALE` | `2.0` | Rendering scale used before OCR |
@@ -181,15 +183,16 @@ The application is configured through environment variables.
 | `RERANKER_MODEL_NAME` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranker model |
 | `HF_LOCAL_FILES_ONLY` | `false` | Restricts Hugging Face loading to local files only |
 | `OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama generation endpoint |
-| `OLLAMA_MODEL` | `mistral` | Ollama model name |
-| `RAG_WARMUP_ON_START` | `true` | Initializes the pipeline during FastAPI startup |
+| `OLLAMA_MODEL` | `qwen2.5:7b` | Ollama model name |
+| `RAG_WARMUP_ON_START` | `false` | Enables optional background pipeline warm-up during FastAPI startup |
 
 ### Example PowerShell session
 
 ```powershell
 $env:DATASET_TYPE="pdf"
-$env:OLLAMA_MODEL="mistral"
-$env:RAG_WARMUP_ON_START="true"
+$env:OLLAMA_MODEL="qwen2.5:7b"
+$env:RAG_WARMUP_ON_START="false"
+$env:RAG_API_URL="http://127.0.0.1:8001"
 ```
 
 ## How to Run
@@ -199,13 +202,13 @@ Run the services in this exact sequence.
 ### 1. Start the FastAPI backend
 
 ```powershell
-.\eraenv\Scripts\python.exe -m uvicorn app.main:app --reload
+.\eraenv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
 FastAPI will start on:
 
 ```text
-http://127.0.0.1:8000
+http://127.0.0.1:8001
 ```
 
 ### 2. Verify backend health
@@ -213,7 +216,7 @@ http://127.0.0.1:8000
 Open:
 
 ```text
-http://127.0.0.1:8000/api/health
+http://127.0.0.1:8001/api/health
 ```
 
 You should see a payload that includes:
@@ -230,6 +233,8 @@ The `pipeline` block reports:
 - document and chunk counts
 - skipped file warnings
 
+By default, the health endpoint returns quickly and does not force heavy model or PDF initialization.
+
 ### 3. Start the Streamlit UI
 
 ```powershell
@@ -241,6 +246,34 @@ Streamlit usually opens at:
 ```text
 http://localhost:8501
 ```
+
+## Running with Docker
+
+The repository includes a shared [Dockerfile](D:\Enterprise%20RAG%20Assistant%20with%20Reranking%20and%20Evaluation\Dockerfile) and a [docker-compose.yml](D:\Enterprise%20RAG%20Assistant%20with%20Reranking%20and%20Evaluation\docker-compose.yml) for the API and UI.
+
+### 1. Make sure Ollama is running on the host
+
+```powershell
+ollama serve
+ollama pull qwen2.5:7b
+```
+
+### 2. Start the containers
+
+```powershell
+docker compose up --build
+```
+
+This starts:
+
+- FastAPI on `http://localhost:8001`
+- Streamlit on `http://localhost:8501`
+
+Notes:
+
+- The API container connects to Ollama through `http://host.docker.internal:11434/api/generate`
+- `data/` and `datasets/` are mounted into the API container
+- If you are on Linux, `host.docker.internal` may need Docker host gateway support enabled
 
 ## API Endpoints
 
@@ -330,6 +363,25 @@ Current tests cover:
 - FAISS result ranking behavior
 - Retrieval evaluation metrics
 
+## CI/CD
+
+The repository includes a GitHub Actions workflow at [.github/workflows/ci.yml](D:\Enterprise%20RAG%20Assistant%20with%20Reranking%20and%20Evaluation\.github\workflows\ci.yml).
+
+The workflow currently:
+
+- Checks out the repository
+- Sets up Python 3.11
+- Installs dependencies
+- Runs the test suite
+- Builds the Docker image
+
+This gives you a solid CI baseline for pull requests and branch pushes. You can extend it later with:
+
+- image publishing to Docker Hub or GHCR
+- deployment to a VM, container service, or Kubernetes
+- security scanning
+- linting and formatting checks
+
 ## Troubleshooting
 
 ### FastAPI starts but `/api/health` shows `pipeline_ready: false`
@@ -358,7 +410,7 @@ Likely causes:
 What to do:
 
 - Start FastAPI first
-- Verify `http://127.0.0.1:8000/api/health`
+- Verify `http://127.0.0.1:8001/api/health`
 - Ensure `RAG_API_URL` matches the backend URL
 
 ### Query returns a 503 error
@@ -401,7 +453,7 @@ What to do:
 ## Operational Notes
 
 - The pipeline is cached inside the FastAPI process
-- With `RAG_WARMUP_ON_START=true`, initialization happens during app startup
+- With `RAG_WARMUP_ON_START=true`, initialization happens in a background thread during app startup
 - The first startup may take time because models and embeddings need to load
 - PDF ingestion can be expensive for large corpora or OCR-heavy documents
 

@@ -1,8 +1,9 @@
 import os
+from threading import Thread
 
 from fastapi import FastAPI
 
-from app.api.routes import get_pipeline, router
+from app.api.routes import ensure_pipeline_ready, router
 
 
 app = FastAPI(
@@ -16,14 +17,17 @@ app.include_router(router)
 
 @app.on_event("startup")
 def warm_up_pipeline():
-    if os.getenv("RAG_WARMUP_ON_START", "true").lower() != "true":
+    if os.getenv("RAG_WARMUP_ON_START", "false").lower() != "true":
         return
 
-    try:
-        get_pipeline()
-    except Exception:
-        # Keep the API responsive so /api/health can report the startup issue.
-        pass
+    def _warm_up():
+        try:
+            ensure_pipeline_ready()
+        except Exception:
+            # Keep the API responsive so /api/health and /api/query can report the issue.
+            pass
+
+    Thread(target=_warm_up, daemon=True).start()
 
 
 @app.get("/")
