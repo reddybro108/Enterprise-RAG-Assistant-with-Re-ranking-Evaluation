@@ -1,4 +1,5 @@
 import os
+from inspect import signature
 
 from sentence_transformers import CrossEncoder
 
@@ -11,12 +12,19 @@ HF_LOCAL_FILES_ONLY = os.getenv("HF_LOCAL_FILES_ONLY", "false").lower() == "true
 _reranker = None
 
 
+def _reranker_kwargs() -> dict:
+    init_params = signature(CrossEncoder.__init__).parameters
+    if "local_files_only" in init_params:
+        return {"local_files_only": HF_LOCAL_FILES_ONLY}
+    return {}
+
+
 def get_reranker():
     global _reranker
     if _reranker is None:
         _reranker = CrossEncoder(
             RERANKER_MODEL_NAME,
-            local_files_only=HF_LOCAL_FILES_ONLY,
+            **_reranker_kwargs(),
         )
     return _reranker
 

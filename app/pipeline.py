@@ -1,6 +1,8 @@
+import os
+
 from app.embeddings.embedder import embed_texts, get_embedding_dimension
 from app.ingestion.chunking import split_documents
-from app.ingestion.loader import load_fiqa_corpus
+from app.ingestion.loader import load_fiqa_corpus, load_pdf_corpus
 from app.reranker.rerank import rerank_results
 from app.retrieval.retriever import retrieve
 from app.vectorstore.faiss_store import FAISSStore
@@ -15,7 +17,17 @@ class RAGPipeline:
         if self.is_ready:
             return
 
-        corpus = load_fiqa_corpus()
+        dataset_type = os.getenv("DATASET_TYPE", "pdf").strip().lower()
+
+        if dataset_type == "pdf":
+            corpus = load_pdf_corpus()
+        elif dataset_type == "fiqa":
+            corpus = load_fiqa_corpus()
+        else:
+            raise ValueError(
+                "Unsupported DATASET_TYPE. Use 'pdf' for local PDFs or 'fiqa' for the FIQA dataset."
+            )
+
         documents = split_documents(corpus)
         texts = [doc.page_content for doc in documents]
         metadatas = [doc.metadata for doc in documents]
