@@ -1,10 +1,17 @@
-from app.ingestion.chunking import split_documents
+from fastapi import FastAPI
 
-documents = split_documents(corpus)
+from app.api.routes import router
 
-texts = []
-doc_ids = []
 
-for doc in documents:
-    texts.append(doc.page_content)
-    doc_ids.append(doc.metadata["doc_id"])
+app = FastAPI(
+    title="Enterprise RAG Assistant",
+    description="Open-source RAG assistant with reranking and evaluation.",
+    version="1.0.0",
+)
+
+app.include_router(router)
+
+
+@app.get("/")
+def healthcheck():
+    return {"status": "ok", "message": "Enterprise RAG Assistant is running"}
