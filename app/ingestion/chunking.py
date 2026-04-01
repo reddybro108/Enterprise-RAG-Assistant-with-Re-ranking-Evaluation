@@ -1,6 +1,7 @@
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+
 def split_documents(corpus):
     documents = []
 
@@ -23,4 +24,8 @@ def split_documents(corpus):
         chunk_overlap=100,
     )
 
-    return splitter.split_documents(documents)
+    chunks = splitter.split_documents(documents)
+    for index, chunk in enumerate(chunks):
+        chunk.metadata["chunk_id"] = index
+
+    return chunks

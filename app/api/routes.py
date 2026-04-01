@@ -32,13 +32,22 @@ def get_pipeline() -> RAGPipeline:
 
 @router.get("/health")
 def api_health():
-    pipeline_ready = False
-    try:
-        pipeline_ready = get_pipeline().is_ready
-    except Exception:
-        pipeline_ready = False
+    status: dict[str, Any] = {
+        "status": "ok",
+        "pipeline_ready": False,
+    }
 
-    return {"status": "ok", "pipeline_ready": pipeline_ready}
+    try:
+        pipeline = get_pipeline()
+        status["pipeline_ready"] = pipeline.is_ready
+        status["pipeline"] = pipeline.get_status()
+    except Exception as exc:
+        status["pipeline"] = {
+            "is_ready": False,
+            "error": str(exc),
+        }
+
+    return status
 
 
 @router.post("/query", response_model=QueryResponse)
@@ -51,7 +60,13 @@ def query_rag(request: QueryRequest):
     except FileNotFoundError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Pipeline is unavailable. Check /api/health for initialization details. "
+                f"Reason: {exc}"
+            ),
+        ) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Query failed: {exc}") from exc
 

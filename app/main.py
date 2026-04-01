@@ -1,6 +1,8 @@
+import os
+
 from fastapi import FastAPI
 
-from app.api.routes import router
+from app.api.routes import get_pipeline, router
 
 
 app = FastAPI(
@@ -10,6 +12,18 @@ app = FastAPI(
 )
 
 app.include_router(router)
+
+
+@app.on_event("startup")
+def warm_up_pipeline():
+    if os.getenv("RAG_WARMUP_ON_START", "true").lower() != "true":
+        return
+
+    try:
+        get_pipeline()
+    except Exception:
+        # Keep the API responsive so /api/health can report the startup issue.
+        pass
 
 
 @app.get("/")

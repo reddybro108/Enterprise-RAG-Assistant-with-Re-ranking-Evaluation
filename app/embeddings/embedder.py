@@ -27,26 +27,24 @@ def get_embedding_model():
     return _model
 
 
-def embed_texts(texts):
+def embed_texts(texts: list[str]) -> np.ndarray:
     model = get_embedding_model()
 
     embeddings = model.encode(
         texts,
         batch_size=32,   # 🔥 improves throughput
         normalize_embeddings=True,
-        show_progress_bar=False
+        show_progress_bar=False,
     )
-    return embeddings.astype("float32")
+    embeddings = np.array(embeddings, dtype="float32")
+
+    if embeddings.ndim == 1:
+        embeddings = embeddings.reshape(1, -1)
+
+    return embeddings
 
 
 def get_embedding_dimension(embeddings: np.ndarray) -> int:
     if embeddings.ndim != 2:
         raise ValueError("Embeddings must be a 2D array")
     return embeddings.shape[1]
-
-if __name__ == "__main__":
-    texts = ["Test embedding"]
-    embeddings = embed_texts(texts)
-
-    print("Shape:", embeddings.shape)
-    print("Sample:", embeddings[0][:5])    

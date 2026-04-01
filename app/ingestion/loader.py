@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 
 DATASET_DIR = Path("datasets") / "fiqa"
@@ -41,7 +42,7 @@ def load_fiqa_corpus(dataset_dir: str | Path = DATASET_DIR):
     return corpus
 
 
-def load_pdf_corpus(dataset_dir: str | Path = PDF_DATASET_DIR):
+def load_pdf_corpus(dataset_dir: str | Path = PDF_DATASET_DIR) -> tuple[dict, list[str]]:
     dataset_dir = Path(dataset_dir)
 
     if not dataset_dir.exists():
@@ -62,11 +63,17 @@ def load_pdf_corpus(dataset_dir: str | Path = PDF_DATASET_DIR):
         )
 
     corpus = {}
+    warnings = []
     for pdf_path in pdf_paths:
-        pages = _extract_pdf_text(pdf_path)
+        try:
+            pages = _extract_pdf_text(pdf_path)
+        except Exception as exc:
+            warnings.append(f"Skipped '{pdf_path}': {exc}")
+            continue
 
         full_text = "\n\n".join(pages).strip()
         if not full_text:
+            warnings.append(f"Skipped '{pdf_path}': no extractable text found.")
             continue
 
         relative_path = pdf_path.relative_to(dataset_dir)
@@ -82,15 +89,25 @@ def load_pdf_corpus(dataset_dir: str | Path = PDF_DATASET_DIR):
             f"PDF files were found under '{dataset_dir}', but no extractable text was detected."
         )
 
-    return corpus
+    return corpus, warnings
 
 
 def _extract_pdf_text(pdf_path: Path) -> list[str]:
-    reader = PdfReader(str(pdf_path))
+    try:
+        reader = PdfReader(str(pdf_path))
+    except PdfReadError as exc:
+        raise RuntimeError(f"Unable to read PDF '{pdf_path.name}': {exc}") from exc
+
     pages = []
 
     for page_index, page in enumerate(reader.pages):
-        text = (page.extract_text() or "").strip()
+        try:
+            text = (page.extract_text() or "").strip()
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to extract text from '{pdf_path.name}' page {page_index + 1}: {exc}"
+            ) from exc
+
         if text:
             pages.append(text)
             continue
@@ -128,7 +145,10 @@ def _extract_page_text_with_ocr(pdf_path: Path, page_index: int) -> str:
             "'pypdfium2' and 'rapidocr-onnxruntime' are available."
         ) from exc
 
-    pdf = pdfium.PdfDocument(str(pdf_path))
+    try:
+        pdf = pdfium.PdfDocument(str(pdf_path))
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load page for OCR in '{pdf_path.name}': {exc}") from exc
     page = None
     bitmap = None
     image = None
@@ -138,6 +158,10 @@ def _extract_page_text_with_ocr(pdf_path: Path, page_index: int) -> str:
         bitmap = page.render(scale=PDF_OCR_RENDER_SCALE)
         image = bitmap.to_pil()
         result, _ = _get_ocr_engine()(np.array(image))
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed OCR extraction for '{pdf_path.name}' page {page_index + 1}: {exc}"
+        ) from exc
     finally:
         if image is not None and hasattr(image, "close"):
             image.close()

@@ -34,6 +34,21 @@ def query_rag_api(query: str, top_k: int, rerank_top_n: int) -> dict[str, Any]:
     return response.json()
 
 
+def get_error_detail(response: requests.Response | None) -> str:
+    if response is None:
+        return "No response body returned."
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text or f"HTTP {response.status_code}"
+
+    if isinstance(payload, dict):
+        return str(payload.get("detail") or payload)
+
+    return str(payload)
+
+
 def format_source_label(metadata: dict[str, Any]) -> str:
     source_path = metadata.get("source_path", "")
     if source_path:
@@ -62,6 +77,23 @@ with st.sidebar:
         st.error("FastAPI is not reachable")
         st.caption(health_error)
 
+    pipeline_status = (health_payload or {}).get("pipeline", {})
+    if pipeline_status:
+        if pipeline_status.get("is_ready"):
+            st.caption(
+                "Pipeline ready"
+                f" | docs: {pipeline_status.get('document_count', 0)}"
+                f" | chunks: {pipeline_status.get('chunk_count', 0)}"
+            )
+        else:
+            st.warning("Pipeline is not ready yet")
+            if pipeline_status.get("error"):
+                st.caption(pipeline_status["error"])
+
+        warnings = pipeline_status.get("warnings") or []
+        if warnings:
+            st.info(f"{len(warnings)} file(s) were skipped during PDF loading.")
+
     top_k = st.slider("Top K Retrieval", min_value=1, max_value=20, value=5)
     rerank_top_n = st.slider("Top N After Rerank", min_value=1, max_value=10, value=3)
 
@@ -76,12 +108,19 @@ submit = st.button("Run Query", type="primary", use_container_width=True)
 if submit:
     if not query.strip():
         st.warning("Enter a question before running the query.")
+    elif not is_healthy:
+        st.error("FastAPI is not reachable. Start the backend before running a query.")
+    elif pipeline_status and not pipeline_status.get("is_ready"):
+        st.error(
+            "The backend is running, but the RAG pipeline is not ready yet. "
+            "Check the sidebar health details first."
+        )
     else:
         with st.spinner("Querying the RAG pipeline..."):
             try:
                 result = query_rag_api(query.strip(), top_k, rerank_top_n)
             except requests.HTTPError as exc:
-                detail = exc.response.text if exc.response is not None else str(exc)
+                detail = get_error_detail(exc.response)
                 st.error(f"Request failed: {detail}")
             except requests.RequestException as exc:
                 st.error(f"Could not reach FastAPI backend: {exc}")
