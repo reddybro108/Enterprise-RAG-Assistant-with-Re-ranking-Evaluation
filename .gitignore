@@ -14,3 +14,16 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# datasets
+data/
+rag_data/
+hf_cache/
+
+# PDFs
+*.pdf
+
+# embeddings / vector db
+*.faiss
+*.pkl
+*.npy
